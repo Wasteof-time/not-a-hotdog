@@ -196,6 +196,10 @@ relative, not absolute.)
 Training curves and the confusion matrix are in `outputs/curves.png` and
 `outputs/confusion_matrix.png`.
 
+![Training and validation curves](outputs/curves.png)
+
+![Confusion matrix on the test set](outputs/confusion_matrix.png)
+
 ---
 
 ## The one technical challenge

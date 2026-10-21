@@ -13,8 +13,12 @@ RUN apt-get update \
 
 COPY requirements.txt .
 # CPU-only torch keeps the image small, then the pinned set fills in the rest
-RUN pip install torch==2.13.0 torchvision==0.28.0 --index-url https://download.pytorch.org/whl/cpu \
-    && pip install -r requirements.txt
+# long timeouts + retries and a pip cache mount: the CPU wheel is ~190 MB and the
+# network can stall, a cached wheel must not be downloaded again on every build
+RUN --mount=type=cache,target=/root/.cache/pip \
+    pip install --cache-dir /root/.cache/pip --timeout 300 --retries 20 \
+      torch==2.13.0 torchvision==0.28.0 --index-url https://download.pytorch.org/whl/cpu \
+    && pip install --cache-dir /root/.cache/pip --timeout 300 --retries 20 -r requirements.txt
 
 COPY . .
 
