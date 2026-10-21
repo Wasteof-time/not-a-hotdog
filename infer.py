@@ -35,12 +35,26 @@ _calib = None
 
 def _load_calib():
     global _calib
-    if _calib is None:
-        _calib = {"threshold": DEFAULT_THRESHOLD, "entropy_max": DEFAULT_ENTROPY_MAX}
-        if os.path.exists(config.CALIB):
+    if os.path.exists(config.CALIB):
+        mtime = os.path.getmtime(config.CALIB)
+        if _calib is None or _calib.get("mtime") != mtime:
             with open(config.CALIB, "r") as f:
-                _calib.update(json.load(f))
+                c = json.load(f)
+            c["mtime"] = mtime
+            _calib = c
+    elif _calib is None:
+        _calib = {"threshold": DEFAULT_THRESHOLD, "entropy_max": DEFAULT_ENTROPY_MAX}
     return _calib
+
+
+def _load_weights(m):
+    try:
+        sd = torch.load(config.WEIGHTS, map_location="cpu")
+    except Exception:
+        sd = torch.load(config.WEIGHTS, map_location="cpu", weights_only=False)
+    if isinstance(sd, dict) and "state_dict" in sd:
+        sd = sd["state_dict"]
+    m.load_state_dict(sd)
 
 
 def load():
@@ -48,10 +62,7 @@ def load():
     if _model is None:
         m = build_model(pretrained=False)
         if os.path.exists(config.WEIGHTS):
-            sd = torch.load(config.WEIGHTS, map_location="cpu")
-            if isinstance(sd, dict) and "state_dict" in sd:
-                sd = sd["state_dict"]
-            m.load_state_dict(sd)
+            _load_weights(m)
         m.eval()
         _model = m
     _load_calib()
@@ -88,8 +99,9 @@ def predict(data: bytes) -> dict:
     p = float(torch.sigmoid(logit).reshape(-1)[0].item())
     c = _load_calib()
     thr = float(c["threshold"])
-    label = "Hotdog!" if p >= thr else "Not Hotdog!"
-    confidence = max(p, 1.0 - p) * 100.0
+    hotdog = p >= thr
+    label = "Hotdog!" if hotdog else "Not Hotdog!"
+    confidence = (p if hotdog else 1.0 - p) * 100.0  # confidence in the label we show
     emax = c["entropy_max"]
     uncertain = bool(_entropy(p) > float(emax)) if emax is not None else False
     return {

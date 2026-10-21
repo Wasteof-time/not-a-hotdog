@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>SeeFood - Hotdog or Not Hotdog?</title>
+<style>
+  :root { color-scheme: light; }
+  * { box-sizing: border-box; }
+  body {
+    margin: 0; padding: 24px;
+    font-family: system-ui, -apple-system, "Segoe UI", Roboto, Helvetica, Arial, sans-serif;
+    background: #f6f4ef; color: #22201c;
+  }
+  .wrap { max-width: 900px; margin: 0 auto; }
+  h1 { margin: 0 0 4px; font-size: 30px; }
+  p.sub { margin: 0 0 20px; color: #6b665c; }
+  #drop {
+    border: 3px dashed #c9c2b4; border-radius: 14px; background: #fffdf8;
+    padding: 36px 20px; text-align: center; cursor: pointer; transition: background .15s, border-color .15s;
+  }
+  #drop.hot { background: #fff4d6; border-color: #e0a33a; }
+  #drop small { color: #6b665c; }
+  #preview { max-width: 100%; max-height: 220px; margin-top: 16px; border-radius: 10px; display: none; }
+  .row { display: flex; gap: 12px; align-items: center; margin-top: 16px; flex-wrap: wrap; }
+  button {
+    font-size: 16px; padding: 10px 22px; border-radius: 10px; border: 0;
+    background: #c2410c; color: #fff; cursor: pointer;
+  }
+  button:disabled { background: #b9b3a6; cursor: not-allowed; }
+  .spinner {
+    width: 20px; height: 20px; border: 3px solid #e3ddd0; border-top-color: #c2410c;
+    border-radius: 50%; display: none; animation: spin .8s linear infinite;
+  }
+  .spinner.on { display: inline-block; }
+  @keyframes spin { to { transform: rotate(360deg); } }
+  #msg { margin-top: 16px; padding: 12px 14px; border-radius: 10px; display: none; white-space: pre-wrap; }
+  #msg.err { display: block; background: #fde8e8; border: 1px solid #f0b4b4; color: #8c1c1c; }
+  #result { display: none; margin-top: 22px; }
+  #label { font-size: 40px; font-weight: 700; margin: 0; }
+  #conf { font-size: 20px; color: #4b463d; margin: 4px 0 0; }
+  #unsure {
+    display: none; margin-top: 10px; padding: 8px 12px; border-radius: 8px;
+    background: #fff3cd; border: 1px solid #e4c65a; color: #6b5300; font-weight: 600;
+  }
+  #imgs { display: flex; gap: 16px; margin-top: 18px; flex-wrap: wrap; }
+  #imgs figure { margin: 0; }
+  #imgs img { max-width: 320px; max-height: 320px; border-radius: 10px; border: 1px solid #ddd6c8; }
+  #imgs figcaption { font-size: 13px; color: #6b665c; margin-top: 6px; }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <h1>SeeFood</h1>
+  <p class="sub">Upload a photo and find out whether it is a hotdog. JPEG, PNG or WebP, up to 5 MB.</p>
+
+  <div id="drop">
+    <strong>Drop an image here</strong> or click to choose a file
+    <small>(the preview below is what the model sees)</small>
+    <img id="preview" alt="Selected image preview" />
+  </div>
+  <input type="file" id="file" accept="image/jpeg,image/png,image/webp" hidden />
+
+  <div class="row">
+    <button id="go" disabled>Predict</button>
+    <div class="spinner" id="spin"></div>
+    <span id="hint"></span>
+  </div>
+
+  <div id="msg"></div>
+
+  <div id="result">
+    <p id="label"></p>
+    <p id="conf"></p>
+    <div id="unsure">Not sure - the model is torn on this one. Try a clearer photo.</div>
+    <div id="imgs">
+      <figure><img id="orig" alt="Original" /><figcaption>Original</figcaption></figure>
+      <figure><img id="heat" alt="Grad-CAM heatmap" /><figcaption>Grad-CAM: what the model looked at</figcaption></figure>
+    </div>
+  </div>
+</div>
+
+<script>
+const MAX_BYTES = 5 * 1024 * 1024;
+const ALLOWED = ["image/jpeg", "image/png", "image/webp"];
+const drop = document.getElementById("drop");
+const input = document.getElementById("file");
+const preview = document.getElementById("preview");
+const go = document.getElementById("go");
+const spin = document.getElementById("spin");
+const hint = document.getElementById("hint");
+const msg = document.getElementById("msg");
+const result = document.getElementById("result");
+
+let picked = null;
+
+function setLoading(on) {
+  go.disabled = on || !picked;
+  spin.classList.toggle("on", on);
+  drop.classList.toggle("hot", on);
+  hint.textContent = on ? "Classifying..." : "";
+}
+
+function showError(text) {
+  msg.className = "err";
+  msg.textContent = text;
+  result.style.display = "none";
+}
+
+function clearError() {
+  msg.className = "";
+  msg.textContent = "";
+}
+
+function clientCheck(file) {
+  if (!ALLOWED.includes(file.type)) return "Only JPEG, PNG or WebP images are allowed.";
+  if (file.size > MAX_BYTES) return "File is larger than 5 MB.";
+  return null;
+}
+
+function accept(file) {
+  if (!file) return;
+  clearError();
+  const err = clientCheck(file);
+  if (err) { showError(err); return; }
+  picked = file;
+  preview.src = URL.createObjectURL(file);
+  preview.style.display = "block";
+  go.disabled = false;
+  hint.textContent = file.name;
+}
+
+drop.addEventListener("click", () => input.click());
+input.addEventListener("change", () => accept(input.files[0]));
+drop.addEventListener("dragover", (e) => { e.preventDefault(); drop.classList.add("hot"); });
+drop.addEventListener("dragleave", () => drop.classList.remove("hot"));
+drop.addEventListener("drop", (e) => {
+  e.preventDefault();
+  drop.classList.remove("hot");
+  accept(e.dataTransfer.files[0]);
+});
+
+go.addEventListener("click", async () => {
+  if (!picked) return;
+  clearError();
+  setLoading(true);
+  try {
+    const fd = new FormData();
+    fd.append("file", picked);
+    const r = await fetch("/predict", { method: "POST", body: fd });
+    let j = null;
+    try { j = await r.json(); } catch (e) { j = null; }
+    if (!r.ok) throw new Error((j && j.error) || "Request failed (" + r.status + ")");
+    document.getElementById("label").textContent = j.label;
+    document.getElementById("conf").textContent = "Confidence: " + j.confidence.toFixed(1) + "%";
+    document.getElementById("unsure").style.display = j.uncertain ? "block" : "none";
+    document.getElementById("orig").src = preview.src;
+    const heat = document.getElementById("heat");
+    if (j.heatmap_b64) { heat.src = "data:image/png;base64," + j.heatmap_b64; heat.style.display = "block"; }
+    else { heat.removeAttribute("src"); heat.style.display = "none"; }
+    result.style.display = "block";
+  } catch (e) {
+    showError(e.message || "Something went wrong. Please try again.");
+  } finally {
+    setLoading(false);
+  }
+});
+</script>
+</body>
+</html>

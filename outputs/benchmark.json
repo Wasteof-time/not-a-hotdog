@@ -1,0 +1,20 @@
+{
+  "torch": {
+    "size_mb": 9.037,
+    "ms_per_img": 20.698
+  },
+  "onnx_fp32": {
+    "size_mb": 8.873,
+    "ms_per_img": 3.414
+  },
+  "onnx_quantized": {
+    "size_mb": 2.409,
+    "ms_per_img": 77.865
+  },
+  "quantization": "int8_dynamic",
+  "accuracy": {
+    "torch": 0.906,
+    "onnx_fp32": 0.906,
+    "onnx_quantized": 0.906
+  }
+}
